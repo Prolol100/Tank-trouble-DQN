@@ -6,18 +6,20 @@ import numpy as np
 import os
 from collections import deque
 
+render = False
 
-'''pygame.init()
+if render:
+    pygame.init()
 
-screen = pygame.display.set_mode((1000, 600))
-pygame.display.set_caption("Tank Game")'''
+    screen = pygame.display.set_mode((1000, 600))
+    pygame.display.set_caption("Tank Game")
 
 def reset_game():
     global tank_x, tank_y, angle, tank2_x, tank2_y, angle2, bullets, tank_bullets, tank2_bullets, last_shot_time, last_shot_time2, spawn_protect, spawn_protect2
     global frame_count, action1, action2
     global map, tile_size, walls
     global size, collison_size, speed, steering, steering2
-    global bullets, bullet_speed,shoot_cooldown
+    global bullets, bullet_speed,shoot_cooldown, random_spawn
     frame_count = 0
     action1 = 0
     action2 = 0
@@ -69,7 +71,10 @@ def reset_game():
                 y = row_index * tile_size + tile_size / 2
                 valid_tiles.append((x, y))
 
-    if random.random() > 0.9:
+    random_spawn = False
+
+    if random.random() > 0.95:
+        random_spawn = True
         while True:
             tank_x, tank_y = random.choice(valid_tiles)
             tank2_x, tank2_y = random.choice(valid_tiles)
@@ -78,7 +83,6 @@ def reset_game():
 
             if min_dist < dist < max_dist:
                 break
-
     bullets = []
     tank_bullets = 0
     tank2_bullets = 0
@@ -141,6 +145,12 @@ def get_state1():
     state1.append(wdx2/1000)
     state1.append(wdy2/600)
     state1.append(can_see(tank_x, tank_y, tank2_x, tank2_y))
+    adx = (tank2_x - tank_x) / 1000
+    ady = (tank2_y - tank_y) / 600
+    state1.append(adx)
+    state1.append(ady)
+    dist = math.sqrt((tank2_x - tank_x)**2 + (tank2_y - tank_y)**2)
+    state1.append(dist / 1000)
     for i in range(10):
         if i < len(bullets):
             state1.append(bullets[i]['bullet_x']/1000)
@@ -168,6 +178,12 @@ def get_state2():
     state2.append(wdx/1000)
     state2.append(wdy/600)
     state2.append(can_see(tank2_x, tank2_y, tank_x, tank_y))
+    adx = (tank_x - tank2_x) / 1000
+    ady = (tank_y - tank2_y) / 600
+    state2.append(adx)
+    state2.append(ady)
+    dist = math.sqrt((tank2_x - tank_x)**2 + (tank2_y - tank_y)**2)
+    state2.append(dist / 1000)
     for i in range(10):
         if i < len(bullets):
             state2.append(bullets[i]['bullet_x']/1000)
@@ -176,9 +192,9 @@ def get_state2():
             state2.append(math.cos(math.radians(bullets[i]['bullet_angle'])))
         else:
             state2.extend([0,0,0,0])
-    return state2
+    return state2 
 
-input_size = 53
+input_size = 112
 h1_size = 32
 h2_size = 32
 output_size = 5
@@ -303,11 +319,16 @@ try:
         epsilon = max(0.05, epsilon * 0.9998)
         epsilon2 = max(0.05, epsilon2 * 0.9998)
 
+        state1 = get_state1()
+        state2 = get_state2()
+
+        prev_state1 = state1.copy()
+        prev_state2 = state2.copy()
+
         while episode_running:
             reward1 = -0.01
             reward2 = -0.01
             frame_count += 1
-            #screen.fill((255, 255, 255))
             collision = False
             collision2 = False
             if frame_count - last_shot_time > shoot_cooldown/2:
@@ -315,10 +336,14 @@ try:
             if frame_count - last_shot_time2 > shoot_cooldown/2:
                 spawn_protect2 = False
 
-            state1 = get_state1()
-            state2 = get_state2()
-            q_values1 = forward(state1)
-            q_values2 = forward2(state2)
+            current_state1 = state1
+            current_state2 = state2
+
+            stacked_state1 = prev_state1 + current_state1
+            stacked_state2 = prev_state2 + current_state2
+
+            q_values1 = forward(stacked_state1)
+            q_values2 = forward2(stacked_state2)
 
             if random.random() < epsilon:
                 action1 = random.randint(0,4)
@@ -330,10 +355,13 @@ try:
             else:
                 action2 = np.argmax(q_values2)
 
-            '''for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    exit()'''
+            if render:
+                screen.fill((255, 255, 255))
+
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        exit()
 
             dx = 0
             dy = 0
@@ -449,12 +477,22 @@ try:
             angle_diff2 = abs((angle2 - target_angle2 + 180) % 360 - 180)
             reward2 += (180 - angle_diff2) / 180 * 0.05
 
+            if 100 < dist < 350:
+                movement1 = abs(dx) + abs(dy)
+                if movement1 < 0.5:
+                    reward1 -= 0.01
+
+            if 100 < dist < 350:
+                movement2 = abs(dx2) + abs(dy2)
+                if movement2 < 0.5:
+                    reward2 -= 0.01
+
             if action1 == 4 and frame_count - last_shot_time > shoot_cooldown:
-                reward1 -= 0.08
+                reward1 -= 0.12
                 if can_see(tank_x, tank_y, tank2_x, tank2_y) == 0:
-                    reward1 -= 0.25
+                    reward1 -= 0.5
                 if angle_diff > 60:
-                    reward1 -= 0.25
+                    reward1 -= 0.5
                 bullet = {'bullet_x': tank_x + math.cos(math.radians(angle)) * 8,
                             'bullet_y': tank_y + math.sin(math.radians(angle)) * 8,
                             'bullet_angle': angle,
@@ -470,11 +508,11 @@ try:
                 last_shot_time = frame_count
                 spawn_protect = True
             if action2 == 4 and frame_count - last_shot_time2 > shoot_cooldown:
-                reward2 -= 0.08
+                reward2 -= 0.12
                 if can_see(tank2_x, tank2_y, tank_x, tank_y) == 0:
-                    reward2 -= 0.25
+                    reward2 -= 0.5
                 if angle_diff2 > 60:
-                    reward2 -= 0.25
+                    reward2 -= 0.5
                 bullet = {'bullet_x': tank2_x + math.cos(math.radians(angle2)) * 10,
                             'bullet_y': tank2_y + math.sin(math.radians(angle2)) * 10,
                             'bullet_angle': angle2,
@@ -497,7 +535,8 @@ try:
 
                 bullet['bullet_x'] += bullet_speed * math.cos(math.radians(bullet['bullet_angle']))
                 bullet['bullet_y'] += bullet_speed * math.sin(math.radians(bullet['bullet_angle']))
-                #pygame.draw.circle(screen, (255, 0, 0), (int(bullet['bullet_x']), int(bullet['bullet_y'])), 5)
+                if render:
+                    pygame.draw.circle(screen, (255, 0, 0), (int(bullet['bullet_x']), int(bullet['bullet_y'])), 5)
                 
                 rounding_error = 0.01
 
@@ -535,16 +574,17 @@ try:
                         bullet['bullet_y'] += bullet_speed * math.sin(math.radians(bullet['bullet_angle']))
                         break
             
-            '''pygame.draw.polygon(screen, (0, 128, 0), [(tank_x + math.cos(math.radians(angle)) * size, tank_y + math.sin(math.radians(angle)) * size), 
-                                                    (tank_x + math.cos(math.radians(angle) + 2.5) * size, tank_y + math.sin(math.radians(angle) + 2.5) * size), 
-                                                    (tank_x + math.cos(math.radians(angle) - 2.5) * size, tank_y + math.sin(math.radians(angle) - 2.5) * size)])
-            pygame.draw.polygon(screen, (0, 0, 128), [(tank2_x + math.cos(math.radians(angle2)) * size, tank2_y + math.sin(math.radians(angle2)) * size), 
-                                                    (tank2_x + math.cos(math.radians(angle2) + 2.5) * size, tank2_y + math.sin(math.radians(angle2) + 2.5) * size), 
-                                                    (tank2_x + math.cos(math.radians(angle2) - 2.5) * size, tank2_y + math.sin(math.radians(angle2) - 2.5) * size)])
-            for wall in walls:
-                pygame.draw.rect(screen, (0, 0, 0), wall)
-            pygame.time.Clock().tick(120)
-            pygame.display.flip()'''
+            if render:
+                pygame.draw.polygon(screen, (0, 128, 0), [(tank_x + math.cos(math.radians(angle)) * size, tank_y + math.sin(math.radians(angle)) * size), 
+                                                        (tank_x + math.cos(math.radians(angle) + 2.5) * size, tank_y + math.sin(math.radians(angle) + 2.5) * size), 
+                                                        (tank_x + math.cos(math.radians(angle) - 2.5) * size, tank_y + math.sin(math.radians(angle) - 2.5) * size)])
+                pygame.draw.polygon(screen, (0, 0, 128), [(tank2_x + math.cos(math.radians(angle2)) * size, tank2_y + math.sin(math.radians(angle2)) * size), 
+                                                        (tank2_x + math.cos(math.radians(angle2) + 2.5) * size, tank2_y + math.sin(math.radians(angle2) + 2.5) * size), 
+                                                        (tank2_x + math.cos(math.radians(angle2) - 2.5) * size, tank2_y + math.sin(math.radians(angle2) - 2.5) * size)])
+                for wall in walls:
+                    pygame.draw.rect(screen, (0, 0, 0), wall)
+                pygame.time.Clock().tick(120)
+                pygame.display.flip()
             
             if frame_count > 500:
                 episode_running = False
@@ -555,8 +595,17 @@ try:
             next_state1 = get_state1()
             next_state2 = get_state2()
 
-            replay_buffer.append((state1, action1, reward1, next_state1, not episode_running))
-            replay_buffer2.append((state2, action2, reward2, next_state2, not episode_running))
+            stacked_next_state1 = current_state1 + next_state1
+            stacked_next_state2 = current_state2 + next_state2
+
+            replay_buffer.append((stacked_state1, action1, reward1, stacked_next_state1, not episode_running))
+            replay_buffer2.append((stacked_state2, action2, reward2, stacked_next_state2, not episode_running))
+
+            prev_state1 = current_state1.copy()
+            prev_state2 = current_state2.copy()
+
+            state1 = next_state1
+            state2 = next_state2
 
             if len(replay_buffer) > 1000 and frame_count % 4 == 0:
                 batch = random.sample(replay_buffer, 32)
