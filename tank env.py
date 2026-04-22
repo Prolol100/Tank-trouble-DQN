@@ -73,7 +73,7 @@ def reset_game():
 
     random_spawn = False
 
-    if random.random() > 0.95:
+    if random.random() > 1:
         random_spawn = True
         while True:
             tank_x, tank_y = random.choice(valid_tiles)
@@ -326,8 +326,8 @@ try:
         prev_state2 = state2.copy()
 
         while episode_running:
-            reward1 = -0.01
-            reward2 = -0.01
+            reward1 = -0.001
+            reward2 = -0.001
             frame_count += 1
             collision = False
             collision2 = False
@@ -433,10 +433,7 @@ try:
                     angle2 += random.choice([-10, 10])
                     reward2 -= 0.5
                     break
-            
-            prev_dist = math.sqrt((tank2_x - tank_x)**2 + (tank2_y - tank_y)**2)
-            prev_dist2 = math.sqrt((tank_x - tank2_x)**2 + (tank_y - tank2_y)**2)
-
+    
             if not collision:
                 tank_x = next_x
             else:
@@ -457,42 +454,13 @@ try:
             else:
                 dy2 = 0
 
-            dist = math.sqrt((tank2_x - tank_x)**2 + (tank2_y - tank_y)**2)
-            dist_change = prev_dist - dist
-            reward1 += dist_change * 0.05
-
-            dist2 = math.sqrt((tank_x - tank2_x)**2 + (tank_y - tank2_y)**2)
-            dist_change2 = prev_dist2 - dist2
-            reward2 += dist_change2 * 0.05
-
-            dxa = tank2_x - tank_x
-            dya = tank2_y - tank_y
-            target_angle = (math.degrees(math.atan2(dya, dxa)) + 360) % 360
-            angle_diff = abs((angle - target_angle + 180) % 360 - 180)
-            reward1 += (180 - angle_diff) / 180 * 0.05
-            
-            dxb = tank_x - tank2_x
-            dyb = tank_y - tank2_y
-            target_angle2 = (math.degrees(math.atan2(dyb, dxb)) + 360) % 360
-            angle_diff2 = abs((angle2 - target_angle2 + 180) % 360 - 180)
-            reward2 += (180 - angle_diff2) / 180 * 0.05
-
-            if 100 < dist < 350:
-                movement1 = abs(dx) + abs(dy)
-                if movement1 < 0.5:
-                    reward1 -= 0.01
-
-            if 100 < dist < 350:
-                movement2 = abs(dx2) + abs(dy2)
-                if movement2 < 0.5:
-                    reward2 -= 0.01
+            if abs(dx) + abs(dy) < 0.1:
+                reward1 -= 0.002
+            if abs(dx2) + abs(dy2) < 0.1:
+                reward2 -= 0.002
 
             if action1 == 4 and frame_count - last_shot_time > shoot_cooldown:
-                reward1 -= 0.12
-                if can_see(tank_x, tank_y, tank2_x, tank2_y) == 0:
-                    reward1 -= 0.5
-                if angle_diff > 60:
-                    reward1 -= 0.5
+                reward1 -= 0.5
                 bullet = {'bullet_x': tank_x + math.cos(math.radians(angle)) * 8,
                             'bullet_y': tank_y + math.sin(math.radians(angle)) * 8,
                             'bullet_angle': angle,
@@ -508,11 +476,7 @@ try:
                 last_shot_time = frame_count
                 spawn_protect = True
             if action2 == 4 and frame_count - last_shot_time2 > shoot_cooldown:
-                reward2 -= 0.12
-                if can_see(tank2_x, tank2_y, tank_x, tank_y) == 0:
-                    reward2 -= 0.5
-                if angle_diff2 > 60:
-                    reward2 -= 0.5
+                reward2 -= 0.5
                 bullet = {'bullet_x': tank2_x + math.cos(math.radians(angle2)) * 10,
                             'bullet_y': tank2_y + math.sin(math.radians(angle2)) * 10,
                             'bullet_angle': angle2,
@@ -543,22 +507,22 @@ try:
                 if not spawn_protect:
                     if bullet['bullet_x'] < tank_x + collison_size and bullet['bullet_x'] > tank_x - collison_size and bullet['bullet_y'] < tank_y + collison_size and bullet['bullet_y'] > tank_y - collison_size:
                         if bullet['bullet_owner'] == 1:
-                            reward1 -= 80
+                            reward1 -= 300
                             Suicides_1 += 1
                         elif bullet['bullet_owner'] == 2:
-                            reward1 -= 30
-                            reward2 += 60
+                            reward1 -= 200
+                            reward2 += 200
                             Wins_2 += 1
                         episode_running = False
 
                 if not spawn_protect2:
                     if bullet['bullet_x'] < tank2_x + collison_size and bullet['bullet_x'] > tank2_x - collison_size and bullet['bullet_y'] < tank2_y + collison_size and bullet['bullet_y'] > tank2_y - collison_size:
                         if bullet['bullet_owner'] == 2:
-                            reward2 -= 80
+                            reward2 -= 300
                             Suicides_2 += 1
                         elif bullet['bullet_owner'] == 1:
-                            reward1 += 60
-                            reward2 -= 30
+                            reward1 += 200
+                            reward2 -= 200
                             Wins_1 += 1
                         episode_running = False
                         
@@ -588,8 +552,8 @@ try:
             
             if frame_count > 500:
                 episode_running = False
-                reward1 -= 10
-                reward2 -= 10
+                reward1 -= 50
+                reward2 -= 50
                 Stalemates += 1
             
             next_state1 = get_state1()
