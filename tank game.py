@@ -89,8 +89,8 @@ while running:
                 last_shot_time = pygame.time.get_ticks()
                 spawn_protect = True
             if event.key == pygame.K_q and pygame.time.get_ticks() - last_shot_time2 > shoot_cooldown:
-                bullet = {'bullet_x': tank2_x + math.cos(math.radians(angle2)) * 10,
-                          'bullet_y': tank2_y + math.sin(math.radians(angle2)) * 10,
+                bullet = {'bullet_x': tank2_x + math.cos(math.radians(angle2)) * 8,
+                          'bullet_y': tank2_y + math.sin(math.radians(angle2)) * 8,
                           'bullet_angle': angle2,
                           'bullet_owner': 2}
                 if tank2_bullets >= 5:
