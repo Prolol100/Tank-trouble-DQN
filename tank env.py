@@ -38,22 +38,22 @@ def reset_game():
     map = [
     "####################",
     "#..................#",
-    "#..##...####...##..#",
-    "#.##...##..##...##.#",
-    "#.#..............#.#",
-    "#.#####......#####.#",
-    "#.....#......#.....#",
-    "#..#............#..#",
-    "#..######..######..#",
-    "#.......#..#.......#",
-    "#...M..........S...#",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "#......M....S......#",
     "####################"
     ]
     tile_size = 50
     walls = []
     valid_tiles = []
-    min_dist = 150
-    max_dist = 600
+    min_dist = 100
+    max_dist = 200
 
     for row_index, row in enumerate(map):
         for col_index, tile in enumerate(row):
@@ -73,7 +73,7 @@ def reset_game():
 
     random_spawn = False
 
-    if random.random() > 1:
+    if random.random() > 0:
         random_spawn = True
         while True:
             tank_x, tank_y = random.choice(valid_tiles)
@@ -98,21 +98,33 @@ def reset_game():
 
 
 
-def closest_wall(x, y):
-    dx_i = float('inf')
-    dy_i = float('inf')
+def get_lidar_data(x, y, tank_angle, num_rays=8, max_dist=300):
+    distances = []
+    for i in range(num_rays):
+        ray_angle = math.radians(tank_angle + (i * (360 / num_rays)))
 
-    for wall in walls:
-        closest_x = max(wall.left, min(x, wall.right))
-        closest_y = max(wall.top, min(y, wall.bottom))
-    
-        dx_a = x - closest_x
-        dy_a = y - closest_y
+        dx = math.cos(ray_angle)
+        dy = math.sin(ray_angle)
+        
+        ray_dist = max_dist
+        
+        for d in range(0, max_dist, 10):
+            check_x = x + dx * d
+            check_y = y + dy * d
+            
+            hit = False
+            for wall in walls:
+                if wall.collidepoint(check_x, check_y):
+                    ray_dist = d
+                    hit = True
+                    break
+            if hit:
+                break
+        
+        distances.append(ray_dist / max_dist)
+        
+    return distances
 
-        if (dx_a * dx_a + dy_a * dy_a) < (dx_i * dx_i + dy_i * dy_i):
-            dx_i = dx_a
-            dy_i = dy_a
-    return dx_i, dy_i
 
 def can_see(x1, y1, x2, y2):
     steps = 20 
@@ -130,20 +142,14 @@ def can_see(x1, y1, x2, y2):
 
 def get_state1():
     state1 = []
-    state1.append(tank_x/1000)
-    state1.append(tank_y/600)
     state1.append(math.sin(math.radians(angle)))
     state1.append(math.cos(math.radians(angle)))
-    state1.append(tank2_x/1000)
-    state1.append(tank2_y/600)
     state1.append(math.sin(math.radians(angle2)))
     state1.append(math.cos(math.radians(angle2)))
-    wdx, wdy = closest_wall(tank_x, tank_y)
-    wdx2, wdy2 = closest_wall(tank2_x, tank2_y)
-    state1.append(wdx/1000)
-    state1.append(wdy/600)
-    state1.append(wdx2/1000)
-    state1.append(wdy2/600)
+    wd = get_lidar_data(tank_x, tank_y, angle)
+    wd2 = get_lidar_data(tank2_x, tank2_y, angle2)
+    state1.extend(wd)
+    state1.extend(wd2)
     state1.append(can_see(tank_x, tank_y, tank2_x, tank2_y))
     adx = (tank2_x - tank_x) / 1000
     ady = (tank2_y - tank_y) / 600
@@ -153,30 +159,27 @@ def get_state1():
     state1.append(dist / 1000)
     for i in range(10):
         if i < len(bullets):
-            state1.append(bullets[i]['bullet_x']/1000)
-            state1.append(bullets[i]['bullet_y']/600)
             state1.append(math.sin(math.radians(bullets[i]['bullet_angle'])))
             state1.append(math.cos(math.radians(bullets[i]['bullet_angle'])))
+            rel_bx = (bullets[i]['bullet_x'] - tank_x) / 1000
+            rel_by = (bullets[i]['bullet_y'] - tank_y) / 600
+            
+            state1.append(rel_bx)
+            state1.append(rel_by)
         else:
             state1.extend([0,0,0,0])
     return state1
 
 def get_state2():
     state2 = []
-    state2.append(tank2_x/1000)
-    state2.append(tank2_y/600)
     state2.append(math.sin(math.radians(angle2)))
     state2.append(math.cos(math.radians(angle2)))
-    state2.append(tank_x/1000)
-    state2.append(tank_y/600)
     state2.append(math.sin(math.radians(angle)))
     state2.append(math.cos(math.radians(angle)))
-    wdx, wdy = closest_wall(tank_x, tank_y)
-    wdx2, wdy2 = closest_wall(tank2_x, tank2_y)
-    state2.append(wdx2/1000)
-    state2.append(wdy2/600)
-    state2.append(wdx/1000)
-    state2.append(wdy/600)
+    wd = get_lidar_data(tank_x, tank_y, angle)
+    wd2 = get_lidar_data(tank2_x, tank2_y, angle2)
+    state2.extend(wd2)
+    state2.extend(wd)
     state2.append(can_see(tank2_x, tank2_y, tank_x, tank_y))
     adx = (tank_x - tank2_x) / 1000
     ady = (tank_y - tank2_y) / 600
@@ -186,15 +189,18 @@ def get_state2():
     state2.append(dist / 1000)
     for i in range(10):
         if i < len(bullets):
-            state2.append(bullets[i]['bullet_x']/1000)
-            state2.append(bullets[i]['bullet_y']/600)
             state2.append(math.sin(math.radians(bullets[i]['bullet_angle'])))
             state2.append(math.cos(math.radians(bullets[i]['bullet_angle'])))
+            rel_bx = (bullets[i]['bullet_x'] - tank2_x) / 1000
+            rel_by = (bullets[i]['bullet_y'] - tank2_y) / 600
+            
+            state2.append(rel_bx)
+            state2.append(rel_by)
         else:
             state2.extend([0,0,0,0])
     return state2 
 
-input_size = 112
+input_size = 128
 h1_size = 32
 h2_size = 32
 output_size = 5
@@ -326,8 +332,8 @@ try:
         prev_state2 = state2.copy()
 
         while episode_running:
-            reward1 = -0.001
-            reward2 = -0.001
+            reward1 = -0.01
+            reward2 = -0.01
             frame_count += 1
             collision = False
             collision2 = False
@@ -341,7 +347,7 @@ try:
 
             stacked_state1 = prev_state1 + current_state1
             stacked_state2 = prev_state2 + current_state2
-
+            
             q_values1 = forward(stacked_state1)
             q_values2 = forward2(stacked_state2)
 
@@ -433,7 +439,10 @@ try:
                     angle2 += random.choice([-10, 10])
                     reward2 -= 0.5
                     break
-    
+            
+            prev_dist = math.sqrt((tank2_x - tank_x)**2 + (tank2_y - tank_y)**2)
+            prev_dist2 = math.sqrt((tank_x - tank2_x)**2 + (tank_y - tank2_y)**2)
+
             if not collision:
                 tank_x = next_x
             else:
@@ -454,13 +463,40 @@ try:
             else:
                 dy2 = 0
 
-            if abs(dx) + abs(dy) < 0.1:
-                reward1 -= 0.002
-            if abs(dx2) + abs(dy2) < 0.1:
-                reward2 -= 0.002
+            dist = math.sqrt((tank2_x - tank_x)**2 + (tank2_y - tank_y)**2)
+            dist_change = prev_dist - dist
+            reward1 += dist_change * 0.05
+
+            dist2 = math.sqrt((tank_x - tank2_x)**2 + (tank_y - tank2_y)**2)
+            dist_change2 = prev_dist2 - dist2
+            reward2 += dist_change2 * 0.05
+
+            dxa = tank2_x - tank_x
+            dya = tank2_y - tank_y
+            target_angle = (math.degrees(math.atan2(dya, dxa)) + 360) % 360
+            angle_diff = abs((angle - target_angle + 180) % 360 - 180)
+            reward1 += (180 - angle_diff) / 180 * 0.05
+            
+            dxb = tank_x - tank2_x
+            dyb = tank_y - tank2_y
+            target_angle2 = (math.degrees(math.atan2(dyb, dxb)) + 360) % 360
+            angle_diff2 = abs((angle2 - target_angle2 + 180) % 360 - 180)
+            reward2 += (180 - angle_diff2) / 180 * 0.05
+
+            if 100 < dist < 350:
+                movement1 = abs(dx) + abs(dy)
+                if movement1 < 0.5:
+                    reward1 -= 0.05
+
+            if 100 < dist < 350:
+                movement2 = abs(dx2) + abs(dy2)
+                if movement2 < 0.5:
+                    reward2 -= 0.05
 
             if action1 == 4 and frame_count - last_shot_time > shoot_cooldown:
-                reward1 -= 0.5
+                reward1 -= 0.2
+                if angle_diff > 60:
+                    reward1 -= 0.2
                 bullet = {'bullet_x': tank_x + math.cos(math.radians(angle)) * 8,
                             'bullet_y': tank_y + math.sin(math.radians(angle)) * 8,
                             'bullet_angle': angle,
@@ -476,9 +512,11 @@ try:
                 last_shot_time = frame_count
                 spawn_protect = True
             if action2 == 4 and frame_count - last_shot_time2 > shoot_cooldown:
-                reward2 -= 0.5
-                bullet = {'bullet_x': tank2_x + math.cos(math.radians(angle2)) * 10,
-                            'bullet_y': tank2_y + math.sin(math.radians(angle2)) * 10,
+                reward2 -= 0.2
+                if angle_diff2 > 60:
+                    reward2 -= 0.2
+                bullet = {'bullet_x': tank2_x + math.cos(math.radians(angle2)) * 8,
+                            'bullet_y': tank2_y + math.sin(math.radians(angle2)) * 8,
                             'bullet_angle': angle2,
                             'bullet_owner': 2}
                 if tank2_bullets >= 5:
@@ -507,26 +545,25 @@ try:
                 if not spawn_protect:
                     if bullet['bullet_x'] < tank_x + collison_size and bullet['bullet_x'] > tank_x - collison_size and bullet['bullet_y'] < tank_y + collison_size and bullet['bullet_y'] > tank_y - collison_size:
                         if bullet['bullet_owner'] == 1:
-                            reward1 -= 300
+                            reward1 -= 80
                             Suicides_1 += 1
                         elif bullet['bullet_owner'] == 2:
-                            reward1 -= 200
-                            reward2 += 200
+                            reward1 -= 30
+                            reward2 += 90
                             Wins_2 += 1
                         episode_running = False
 
                 if not spawn_protect2:
                     if bullet['bullet_x'] < tank2_x + collison_size and bullet['bullet_x'] > tank2_x - collison_size and bullet['bullet_y'] < tank2_y + collison_size and bullet['bullet_y'] > tank2_y - collison_size:
                         if bullet['bullet_owner'] == 2:
-                            reward2 -= 300
+                            reward2 -= 80
                             Suicides_2 += 1
                         elif bullet['bullet_owner'] == 1:
-                            reward1 += 200
-                            reward2 -= 200
+                            reward1 += 90
+                            reward2 -= 30
                             Wins_1 += 1
                         episode_running = False
                         
-
                 for wall in walls:
                     if wall.collidepoint(bullet['bullet_x'], bullet['bullet_y']) or wall.collidepoint(prev_x, prev_y):
                         if prev_x <= (wall.left + rounding_error) or prev_x >= (wall.right - rounding_error):
@@ -550,7 +587,7 @@ try:
                 pygame.time.Clock().tick(120)
                 pygame.display.flip()
             
-            if frame_count > 500:
+            if frame_count > 350:
                 episode_running = False
                 reward1 -= 50
                 reward2 -= 50
@@ -572,7 +609,7 @@ try:
             state2 = next_state2
 
             if len(replay_buffer) > 1000 and frame_count % 4 == 0:
-                batch = random.sample(replay_buffer, 32)
+                batch = random.sample(replay_buffer, 64)
 
                 dw1 = np.zeros_like(w1)
                 dw2 = np.zeros_like(w2)
@@ -592,7 +629,7 @@ try:
                     else:
                         target = reward + 0.99 * np.max(next_q_values)
 
-                    target = np.clip(target, -50, 50)
+                    target = np.clip(target, -100, 100)
                     error = target - q_values[action]
                     error = np.clip(error, -20, 20)
 
@@ -625,8 +662,8 @@ try:
                     pygame.quit()
                     exit()
 
-            if len(replay_buffer2) > 1000 and frame_count % 4 == 0:
-                batch = random.sample(replay_buffer2, 32)
+        if len(replay_buffer2) > 1000 and frame_count % 4 == 0:
+                batch = random.sample(replay_buffer2, 64)
 
                 dw1 = np.zeros_like(w1a)
                 dw2 = np.zeros_like(w2a)
@@ -646,7 +683,7 @@ try:
                     else:
                         target = reward + 0.99 * np.max(next_q_values)
 
-                    target = np.clip(target, -50, 50)
+                    target = np.clip(target, -100, 100)
                     error = target - q_values[action]
                     error = np.clip(error, -20, 20)
 
@@ -674,7 +711,7 @@ try:
                 w1a += dw1 * 0.0002 / len(batch)
                 b1a += db1 * 0.0002 / len(batch)
                 
-                if np.isnan(w1a).any() or np.isnan(w2a).any() or np.isnan(w3a).any():
+                if np.isnan(w1).any() or np.isnan(w2).any() or np.isnan(w3).any():
                     print("NaN detected in weights, stopping training")
                     pygame.quit()
                     exit()
@@ -687,7 +724,7 @@ try:
             target_b1 = b1.copy()
             target_b2 = b2.copy()
             target_b3 = b3.copy()
-
+            
             target_w1a = w1a.copy()
             target_w2a = w2a.copy()
             target_w3a = w3a.copy()
@@ -712,24 +749,24 @@ try:
             Suicides_2 = 0
             Stalemates = 0
 
-        np.save("w1.npy", w1)
-        np.save("w2.npy", w2)
-        np.save("w3.npy", w3)
+            np.save("w1.npy", w1)
+            np.save("w2.npy", w2)
+            np.save("w3.npy", w3)
 
-        np.save("b1.npy", b1)
-        np.save("b2.npy", b2)
-        np.save("b3.npy", b3)  
+            np.save("b1.npy", b1)
+            np.save("b2.npy", b2)
+            np.save("b3.npy", b3)  
 
-        np.save("w1a.npy", w1a)
-        np.save("w2a.npy", w2a)
-        np.save("w3a.npy", w3a)
+            np.save("w1a.npy", w1a)
+            np.save("w2a.npy", w2a)
+            np.save("w3a.npy", w3a)
 
-        np.save("b1a.npy", b1a)
-        np.save("b2a.npy", b2a)
-        np.save("b3a.npy", b3a)   
+            np.save("b1a.npy", b1a)
+            np.save("b2a.npy", b2a)
+            np.save("b3a.npy", b3a)   
 
-        np.save("epsilon.npy", epsilon)
-        np.save("epsilon2.npy", epsilon2)
+            np.save("epsilon.npy", epsilon)
+            np.save("epsilon2.npy", epsilon2)
 
         print(f"Episode: {episode}, Epsilon: {epsilon:.3f}, Epsilon 2: {epsilon2:.3f}, Max_Q1: {np.max(q_values1):.3f}, Max_Q2: {np.max(q_values2):.3f}")
 
