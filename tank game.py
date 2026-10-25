@@ -1,6 +1,7 @@
 import pygame
 import math
 import time
+from collections import deque
 
 pygame.init()
 
@@ -22,7 +23,7 @@ steering = 1
 steering2 = 1
 map = [
 "####################",
-"#.M................#",
+"#.M..............S.#",
 "#..##...####...##..#",
 "#.##...##..##...##.#",
 "#.#..............#.#",
@@ -31,7 +32,7 @@ map = [
 "#..#............#..#",
 "#..######..######..#",
 "#.......#..#.......#",
-"#................S.#",
+"#..................#",
 "####################"
 ]
 tile_size = 50
@@ -62,8 +63,19 @@ for row_index, row in enumerate(map):
                 tank2_x = col_index * tile_size + tile_size / 2
                 tank2_y = row_index * tile_size + tile_size / 2
 
+def can_see(x1, y1, x2, y2):
+    p1 = (int(x1), int(y1))
+    p2 = (int(x2), int(y2))
+
+    for wall in walls:
+        if wall.clipline(p1, p2):
+            return 0 
+
+    return 1 
+
 while running:
     screen.fill((255, 255, 255))
+    print(can_see(tank_x, tank_y, tank2_x, tank2_y))
     collision = False
     collision2 = False
     if pygame.time.get_ticks() - last_shot_time > shoot_cooldown/2:
@@ -227,10 +239,6 @@ while running:
                 bullet['bullet_x'] += bullet_speed * math.cos(math.radians(bullet['bullet_angle']))
                 bullet['bullet_y'] += bullet_speed * math.sin(math.radians(bullet['bullet_angle']))
                 break
-            
-                
-
-    print(len(bullets))
 
     pygame.draw.polygon(screen, (0, 128, 0), [(tank_x + math.cos(math.radians(angle)) * size, tank_y + math.sin(math.radians(angle)) * size), 
                                               (tank_x + math.cos(math.radians(angle) + 2.5) * size, tank_y + math.sin(math.radians(angle) + 2.5) * size), 
