@@ -1,6 +1,11 @@
 # Tank-trouble-DQN
-A DQN trained using agent self play to play a clone of tank trouble 
+A DQN trained by playing against another DQN in a clone of the game tank trouble
 
-This project is still in the making as the agent are yet to show the smart and competitive behaviour I expect. And also I couldn't upload the weights for the neural network so their behaviour will be completely random
+Unfortunately this project couldn't achieve its objective of making the agents good enough to defeat a human player with ease
+I worked on this project for about 6-7 months, where most of my time was spent manually adjust rewards
+But due to the inherent complexity of the environment and my unfamiliarity with machine learning, it was quite difficult to do so
+Therefore I have given up on this project and it will be left as it is
 
-Also, this was my first ML project and also my first time using pygame and numpy. So the code I have wrote is definitely poor and very beginner-ish, so don't mind that
+This project however, was a great learning experience for me to not only get into ML but also become comfortable in programming in python and using libraries like pygame and numpy
+
+If you wanna take the project files and improve upon them to train the model, you are free to do so as long as you give credit
